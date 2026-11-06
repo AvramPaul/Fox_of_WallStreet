@@ -1,0 +1,25 @@
+# --- Secrete (NU se publică niciodată) ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# --- Mediu Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- Date generate la rulare ---
+.cache/
+runs/
+raport_sateliti.md
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store
