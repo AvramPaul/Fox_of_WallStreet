@@ -11,7 +11,7 @@ load_dotenv(ROOT / ".env")
 
 CACHE_DIR = ROOT / ".cache"
 RUNS_DIR = ROOT / "runs"
-REPORT_PATH = ROOT / "raport_sateliti.md"
+REPORT_PATH = ROOT / "raport_sateliti.html"
 
 VALID_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 

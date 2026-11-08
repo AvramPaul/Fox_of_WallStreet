@@ -278,9 +278,7 @@ def _show(result: dict) -> None:
         ui.success(flag)
     for note in result.get("notes", []):
         ui.info(note)
-    color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}[result["verdict"]]
-    ui.console.print(f"[bold {color}]Verdict: {result['verdict']}[/bold {color}]"
-                     f"  [dim](date: {result['data_quality']})[/dim]")
+    ui.verdict(result["verdict"], result["data_quality"])
 
 
 @safe_tool

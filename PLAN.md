@@ -12,7 +12,7 @@ Agent AI **autonom** în Python (Tool Calling / ReAct loop, Claude API) care gă
 
 Agentul NU rulează un set static de filtre: își alege singur uneltele, în buclă, iterând filtrele până obține o listă scurtă de elită, apoi o „autopsiază” contabil și o supune unui test de paranoia OSINT, la final redactând raportul în română în stilul „Vulpea de pe Wall Street”.
 
-**Livrabile finale:** `raport_sateliti.md` + afișare formatată în terminal (`rich`), loguri colorate în timp real pentru fiecare pas de gândire.
+**Livrabile finale:** `raport_sateliti.html` (din 2026-11-06; înainte `.md`) + afișare formatată în terminal (`rich`), loguri colorate în timp real pentru fiecare pas de gândire.
 
 ---
 
@@ -45,7 +45,7 @@ Fox_of_WallStreet/
 ├── README.md                  # scurt: instalare, configurare, rulare
 ├── requirements.txt
 ├── .env.example               # ANTHROPIC_API_KEY, MODEL, EFFORT, GITHUB_TOKEN (opțional), MAX_ITERATIONS
-├── .gitignore                 # .venv, .env, .cache/, raport_sateliti.md, runs/
+├── .gitignore                 # .venv, .env, .cache/, raport_sateliti.*, runs/
 ├── config.py                  # încarcă .env, constante (limite, timeouts, căi), dataclass Settings
 ├── prompts.py                 # SYSTEM_PROMPT (persona EXACTĂ + protocol operațional), mesaj inițial user, nudge-uri
 ├── agent.py                   # entrypoint CLI + bucla ReAct + logging fazelor
@@ -270,6 +270,7 @@ main():
   - Test: `python agent.py --max-iterations 6` → bucla merge, `cache_read_input_tokens > 0` din a 2-a iterație, Ctrl+C salvează transcriptul.
 - [x] **Pas 11** — Rulare E2E cu Claude real: `pytest -m live tests/test_prompts.py` (prefix ≥4096 tokeni) → probă `--max-iterations 6` → rulare completă → `raport_sateliti.md` cu 3-5 companii + Cimitirul Iluziilor; verificare manuală calitate.
 - [x] **Pas 12** — `README.md` scurt (instalare, `.env`, rulare, teste, limitări surse gratuite).
+- [x] **Pas 13** — Raport HTML (`utils/journal.py`, `utils/html_report.py`): pagina „Raport Sateliți” (fișe interactive) + pagina „Jurnal” (tot ce apare în terminal); textul Vulpii scris mai mic; `python -m utils.html_report runs/<run>` pentru rulări vechi.
 
 ---
 
@@ -291,6 +292,8 @@ main():
 | 2026-10-28 | 11 | ⏸️ Blocat: nu există `ANTHROPIC_API_KEY` (nici `.env`, nici CLI `ant`). Tot ce se poate verifica fără cheie e verificat: pipeline-ul cap-coadă cu LLM simulat + unelte reale trece (`test_live_pipeline_with_real_tools`). | Utilizatorul pune cheia în `.env`, apoi Pas 11 conform checklist-ului. |
 | 2026-10-28 | 12 | `README.md` gata (instalare, `.env`, rulare + opțiuni CLI, demo-uri pe unelte, teste unit/live, structură, limitări ale surselor gratuite, disclaimer). `python agent.py --help` OK. Suita finală: 150 unit passed, 8 live sărite implicit; `pytest -m live` → 7 passed (1 sărit: cere cheie). | Doar Pas 11 rămas. |
 | 2026-10-28 | 11 | ✅ Cheie pusă în `.env`. `test_live_prefix_token_count` passed. Probă 6 iterații: Faza 1 cu 8 apeluri screener (3 unghiuri, strânge/relaxează corect), avertismentul ultimelor iterații → raport onest (spune că autopsia/OSINT n-au rulat); cache hit 61%, $0.35. Rulare completă: 7 iterații, 7 screener / 8 autopsii / 8 OSINT / 1 raport, cache hit 79%, **$0.62**; raport: FIX, NBIX, NU, DECK + Cimitir (ADBE, KSPI, EXEL), cifre din unelte, surse căzute declarate, fără prețuri-țintă. Problemă găsită: GitHub Search fără token (10 req/min, în practică ~4 până la 403) → `rate_limited` la aproape toate radarele; backoff-ul de 1-5 s era inutil. Fix: `_github_search` citește `X-RateLimit-Reset` și așteaptă până la resetare (≤65 s, apoi o reîncercare), altfel `_GitHubQuotaExhausted` fără furtună de retry; verificat live 12/12 căutări consecutive. Fix 2: helperii de log din `utils/console.py` scapă markup-ul rich (etichetele `[github]`, `[reddit]` dispăreau; un `[/x]` în mesajul de eroare ar fi crăpat afișarea). 152 unit passed. | Proiect complet. Opțional: `GITHUB_TOKEN` în `.env` (elimină așteptările GitHub). |
+| 2026-11-06 | 13 | Raport HTML în loc de `.md`. `utils/journal.py` (EVENTS = fiecare mesaj al consolei, ca structură; TOOL_RESULTS = rezultatele uneltelor, din `tools.dispatch`). `utils/console.py` scrie în jurnal (+ helper `verdict()`, folosit de fundamentals_tool). `utils/html_report.py`: un singur fișier HTML fără dependențe externe, 2 pagini (#raport / #jurnal). Pagina 1: fișă pe companie (KPI colorați + tooltip, grafice SVG pe ani: venituri/FCF/marjă/cash vs datorie, flaguri, radar OSINT, textul Vulpii mic, în taburi), tabel sortabil + hartă preț vs creștere, încercări FinViz + pâlnie, Cimitir cu pietre funerare din autopsii. Pagina 2: jurnal pe faze, filtre, căutare; gândurile și textul Vulpii mici, restrânse la 2 rânduri. Markdown prin markdown-it-py (HTML brut dezactivat), tot textul escapat, link-uri doar http(s). `report_tool` scrie HTML-ul la raport; `agent.py` îl rescrie la final cu rezumatul și îl deschide în browser (`--no-open`); fără raport → doar `runs/<run>/`. `python -m utils.html_report runs/<run>` reconstruiește din transcript (ultimul tool_result lipsește din transcript → raportul se ia din ultimul tool_use). Persona și prompturile neschimbate; doar descrierea uneltei de raport spune acum `.html`. Verificat: capturi Chrome headless desktop + 390 px, test automat de clickuri (grafice, taburi, sortare, filtre, căutare). Test: 164 unit passed. | — |
+| 2026-11-06 | 13b | Redesign la cererea utilizatorului: fundal alb, minimalist, fără chenare, iconițe (inclusiv emoji din textul agentului) și grafice; o companie pe toată lățimea (nu două pe rând); tot textul agentului despre firmă vizibil (Cu ce se ocupă / De ce cifrele arată beton / Testul de paranoia), nu în taburi; tabele centrate: indicatori, cifre anuale, finaliști (sortabil), cimitir, căutări FinViz, selecție. Jurnal: faze ca titluri, rânduri simple cu oră + etichetă (gând / agent / unealtă). Verificat: capturi desktop + 390 px, test automat de clickuri. Test: 164 unit passed. | — |
 
 ---
 

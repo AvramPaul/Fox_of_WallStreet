@@ -7,7 +7,7 @@ Agentul lucrează singur, în 4 faze vizibile în terminal:
 1. **Jocul cu filtrele FinViz.** Testează mai multe unghiuri (GARP, Cash-Flow Monsters…) și strânge sau relaxează filtrele până ajunge la 5-12 companii.
 2. **Autopsia contabilă.** Verifică 3-4 ani de FCF, venituri, marje și datorii (Yahoo Finance) și elimină value trap-urile.
 3. **Testul de Paranoia (OSINT).** Caută știri, discuții HackerNews, clone open-source pe GitHub și plângeri pe Reddit.
-4. **Raportul.** Scrie `raport_sateliti.md` cu 3-5 companii și „Cimitirul Iluziilor”.
+4. **Raportul.** Scrie `raport_sateliti.html` cu 3-5 companii și „Cimitirul Iluziilor”, apoi îl deschide în browser.
 
 ## Instalare
 
@@ -45,12 +45,21 @@ python agent.py                                  # rulare completă
 python agent.py --max-iterations 6               # rulare scurtă, de probă
 python agent.py --mandate "Doar companii europene, fără energie"
 python agent.py --effort medium --no-cache
+python agent.py --no-open                        # nu deschide raportul în browser
 ```
 
 Ies la final:
-- **`raport_sateliti.md`**, cu o copie în `runs/<data-ora>/`;
+- **`raport_sateliti.html`**, cu o copie în `runs/<data-ora>/`. Se deschide singur în browser la final (`--no-open` oprește asta). Are două pagini:
+  - **Raport:** design minimalist pe fundal alb. Fiecare companie are secțiunea ei, pe toată lățimea: cu ce se ocupă firma, tabelul de indicatori (P/E, P/FCF, creștere, marjă, cash net…; treci cu mouse-ul peste titluri pentru explicații), cifrele pe ani, tot ce a scris agentul despre ea și semnalele automate (verificarea cifrelor, radarul de știri cu linkuri). Urmează tabelul finaliștilor (sortabil), Cimitirul Iluziilor și cum a ales agentul (căutările din FinViz, selecția pas cu pas);
+  - **Jurnal:** tot ce a apărut în terminal, pe faze, cu ora fiecărui mesaj, filtre și căutare. Dacă rularea se oprește fără raport, jurnalul se salvează doar în `runs/<data-ora>/`, ca să nu înlocuiască raportul bun anterior;
 - **`runs/<data-ora>/transcript.json`**: conversația completă, pentru depanare;
 - **un rezumat în terminal**: iterații, apeluri pe unealtă, tokeni, procentul de cache, costul estimat.
+
+Un raport HTML se poate reconstrui și dintr-o rulare veche (cu `transcript.json`). Jurnalul reconstruit e aproximativ, pentru că terminalul original nu se păstra atunci:
+
+```bash
+python -m utils.html_report runs/20261106-124703
+```
 
 Fiecare unealtă se poate rula și singură, pentru demo:
 
@@ -74,7 +83,9 @@ agent.py              bucla ReAct, faze, bugete, transcript, rezumat
 prompts.py            persona „Vulpea” (text exact) + protocolul de lucru
 config.py             setări din .env
 tools/                cele 4 unelte + registry (scheme, validare, dispatch)
-utils/console.py      loguri colorate (rich)
+utils/console.py      loguri colorate (rich), copiate și în jurnal
+utils/journal.py      jurnalul rulării (mesajele din terminal + rezultatele uneltelor)
+utils/html_report.py  raportul HTML: pagina Raport + pagina Jurnal
 utils/resilience.py   retry/backoff, rate-limit, cache pe disc, @safe_tool
 PLAN.md               arhitectura și jurnalul de progres
 ```

@@ -65,7 +65,7 @@ class FakeClient:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.md")
+    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.html")
     fake = {
         "finviz_dynamic_screener": lambda filters, angle="": json.dumps({"ok": True, "count": 8, "rows": []}),
         "deep_fundamental_inspector": lambda ticker: json.dumps({"ok": True, "ticker": ticker, "verdict": "PASS"}),
@@ -223,7 +223,7 @@ def test_estimate_cost():
 
 @pytest.mark.live
 def test_live_pipeline_with_real_tools(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.md")
+    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.html")
     script = [
         response([tool_use("finviz_dynamic_screener",
                            {"filters": {"Market Cap.": "+Mid (over $2bln)", "P/E": "<25", "P/FCF": "<20",

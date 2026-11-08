@@ -12,6 +12,8 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
+from utils import journal
+
 # Pe Windows stdout poate fi cp1252 → diacriticele/emoji ar arunca UnicodeEncodeError.
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure") and (_stream.encoding or "").lower() != "utf-8":
@@ -30,18 +32,22 @@ PHASES = {
 # ── Mesaje generale ──────────────────────────────────────────────────────────
 
 def info(msg: str) -> None:
+    journal.event("info", text=msg)
     console.print(f"[dim]•[/dim] {escape(msg)}")
 
 
 def success(msg: str) -> None:
+    journal.event("success", text=msg)
     console.print(f"[bold green]✔[/bold green] {escape(msg)}")
 
 
 def warn(msg: str) -> None:
+    journal.event("warn", text=msg)
     console.print(f"[bold yellow]⚠[/bold yellow] [yellow]{escape(msg)}[/yellow]")
 
 
 def error(msg: str) -> None:
+    journal.event("error", text=msg)
     console.print(f"[bold red]✖[/bold red] [red]{escape(msg)}[/red]")
 
 
@@ -49,17 +55,20 @@ def error(msg: str) -> None:
 
 def phase_banner(phase: int) -> None:
     title, color = PHASES.get(phase, (f"Faza {phase}", "white"))
+    journal.event("phase", phase=phase, title=title)
     console.print()
     console.print(Rule(f"[bold {color}]{title}[/bold {color}]", style=color))
 
 
 def iteration_header(n: int, max_n: int) -> None:
+    journal.event("iteration", n=n, max=max_n)
     console.print(f"\n[dim]── iterația {n}/{max_n} ──[/dim]")
 
 
 def show_thought(text: str) -> None:
     """Rezumatul gândirii modelului (thinking display='summarized')."""
     if text and text.strip():
+        journal.event("thought", text=text.strip())
         console.print(Panel(Text(text.strip(), style="italic"), title="💭 Gândul Vulpii",
                             title_align="left", border_style="bright_black"))
 
@@ -67,12 +76,14 @@ def show_thought(text: str) -> None:
 def show_agent_text(text: str) -> None:
     """Text vizibil scris de agent (ex. fraza dinaintea unui apel de tool)."""
     if text and text.strip():
+        journal.event("agent", text=text.strip())
         console.print(Panel(Markdown(text.strip()), title="🦊 Vulpea", title_align="left",
                             border_style="orange3"))
 
 
 def show_tool_call(name: str, args: Mapping[str, Any]) -> None:
     shown = ", ".join(f"{k}={_short(v)}" for k, v in args.items() if k != "filters")
+    journal.event("tool", name=name, args=shown)
     console.print(f"[bold blue]🔧 {name}[/bold blue]([dim]{shown}[/dim])")
 
 
@@ -92,6 +103,7 @@ def show_usage(usage: Any) -> None:
     c_write = get("cache_creation_input_tokens", 0) or 0
     total_in = inp + c_read + c_write
     hit = f"{100 * c_read / total_in:.0f}%" if total_in else "–"
+    journal.event("usage", inp=inp, out=out, c_read=c_read, c_write=c_write, hit=hit)
     console.print(f"[dim]tokeni: in {inp:,} · cache citit {c_read:,} · cache scris {c_write:,} "
                   f"· out {out:,} · cache hit {hit}[/dim]")
 
@@ -107,6 +119,7 @@ def show_filters_diff(prev: Mapping[str, str] | None, curr: Mapping[str, str], a
     table.add_column("Înainte", style="dim")
     table.add_column("Acum")
     table.add_column("", justify="center")
+    logged = []
     for key in list(curr) + [k for k in prev if k not in curr]:
         before, now = prev.get(key), curr.get(key)
         if before is None:
@@ -118,6 +131,8 @@ def show_filters_diff(prev: Mapping[str, str] | None, curr: Mapping[str, str], a
         else:
             mark, style = "", ""
         table.add_row(key, before or "", Text(now or "—", style=style), mark)
+        logged.append([key, before or "", now or "—", mark])
+    journal.event("filters", angle=angle, rows=logged)
     console.print(table)
 
 
@@ -128,6 +143,8 @@ def show_screener_count(count: int, guidance: str) -> None:
         style = "bold red"
     else:
         style = "bold yellow"
+    level = {"bold green": "ok", "bold red": "bad"}.get(style, "mid")
+    journal.event("count", count=count, guidance=guidance, level=level)
     console.print(f"[{style}]→ {count} companii[/{style}]  [italic]{guidance}[/italic]")
 
 
@@ -139,13 +156,33 @@ def show_table(title: str, columns: Sequence[str], rows: Iterable[Sequence[Any]]
     table = Table(title=title, title_justify="left", header_style="bold")
     for col in columns:
         table.add_column(col, style=styles.get(col, ""))
+    plain_rows = []
     for row in rows:
-        table.add_row(*("" if v is None else str(v) for v in row))
+        cells = ["" if v is None else str(v) for v in row]
+        table.add_row(*cells)
+        plain_rows.append([_plain(c) for c in cells])
+    journal.event("table", title=_plain(title), columns=[_plain(c) for c in columns], rows=plain_rows)
     console.print(table)
 
 
+def verdict(value: str, data_quality: str = "") -> None:
+    """Verdictul autopsiei contabile (PASS / WARN / FAIL)."""
+    journal.event("verdict", verdict=value, quality=data_quality)
+    color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(value, "white")
+    console.print(f"[bold {color}]Verdict: {value}[/bold {color}]  [dim](date: {data_quality})[/dim]")
+
+
 def show_markdown(md: str, title: str = "") -> None:
+    journal.event("markdown", title=title)
     console.print(Panel(Markdown(md), title=title or None, border_style="green", padding=(1, 2)))
+
+
+def _plain(markup: str) -> str:
+    """Textul fără marcajele rich ([bold]…), pentru jurnalul HTML."""
+    try:
+        return Text.from_markup(markup).plain
+    except Exception:  # marcaj invalid → îl păstrăm ca atare
+        return markup
 
 
 def _short(value: Any, limit: int = 60) -> str:

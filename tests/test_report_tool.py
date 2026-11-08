@@ -22,7 +22,7 @@ def report(n: int, graveyard: bool = True) -> str:
 
 @pytest.fixture
 def tmp_report(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.md")
+    monkeypatch.setattr(config, "REPORT_PATH", tmp_path / "raport_sateliti.html")
     rt.configure(run_dir=tmp_path / "run1", model="claude-test")
     yield tmp_path
     rt.configure(run_dir=None)
@@ -55,8 +55,9 @@ def test_tool_writes_file_with_header_and_disclaimer(tmp_report):
     saved = config.REPORT_PATH.read_text(encoding="utf-8")
     assert "Paranoid Wolf" in saved and "claude-test" in saved
     assert "Nu este o recomandare de investiții" in saved
-    assert "Povestea pe șleau" in saved  # UTF-8 păstrat
-    assert (tmp_report / "run1" / "raport_sateliti.md").read_text(encoding="utf-8") == saved
+    assert "o mașinărie de făcut bani" in saved  # UTF-8 păstrat
+    assert saved.startswith("<!doctype html>") and 'id="jurnal"' in saved
+    assert (tmp_report / "run1" / "raport_sateliti.html").read_text(encoding="utf-8") == saved
 
 
 def test_tool_invalid_report_does_not_write(tmp_report):

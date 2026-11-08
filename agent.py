@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import sys
+import webbrowser
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,7 @@ import prompts
 import tools
 from tools import report_tool
 from utils import console as ui
+from utils import journal
 from utils.resilience import DiskCache
 
 REPORT_TOOL = "generate_client_report"
@@ -152,8 +154,9 @@ def _run_tools(response, state: RunState, settings: config.Settings, truncated: 
 # ── Bucla ReAct ──────────────────────────────────────────────────────────────
 
 def run(settings: config.Settings, client, mandate: str | None = None, run_dir: Path | None = None,
-        today: str | None = None) -> RunState:
+        today: str | None = None, open_browser: bool = False) -> RunState:
     run_dir = run_dir or config.RUNS_DIR / dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    journal.reset()
     report_tool.configure(run_dir=run_dir, model=settings.model)
     state = RunState()
     messages: list[dict] = [{"role": "user",
@@ -235,11 +238,32 @@ def run(settings: config.Settings, client, mandate: str | None = None, run_dir: 
     finally:
         save_transcript(run_dir / "transcript.json", messages, state)
 
-    _show_summary(settings, state, run_dir)
+    rows = _summary_rows(settings, state, run_dir)
+    _show_summary(state, rows)
+    _write_html(state, rows, open_browser)
     return state
 
 
-def _show_summary(settings: config.Settings, state: RunState, run_dir: Path) -> None:
+def _write_html(state: RunState, rows: list, open_browser: bool) -> None:
+    """Rescrie raportul HTML la final, cu tot jurnalul și rezumatul rulării."""
+    try:
+        paths = report_tool.write_html(summary=[[str(k), str(v)] for k, v in rows], stop_reason=state.stop_reason)
+    except Exception as exc:  # pagina HTML nu trebuie să strice o rulare reușită
+        ui.warn(f"Nu am putut scrie raportul HTML: {type(exc).__name__}: {exc}")
+        return
+    if not paths:
+        return
+    page = Path(paths[0])
+    if not state.report_done:
+        ui.info(f"Jurnalul rulării (fără raport): {page}")
+    if open_browser:
+        try:
+            webbrowser.open(page.resolve().as_uri())
+        except Exception:
+            pass
+
+
+def _summary_rows(settings: config.Settings, state: RunState, run_dir: Path) -> list:
     u = state.usage
     total_in = u["input_tokens"] + u["cache_read_input_tokens"] + u["cache_creation_input_tokens"]
     hit = f"{100 * u['cache_read_input_tokens'] / total_in:.0f}%" if total_in else "–"
@@ -251,6 +275,10 @@ def _show_summary(settings: config.Settings, state: RunState, run_dir: Path) -> 
             ["Tokeni output", f"{u['output_tokens']:,}"], ["Cache hit", hit],
             ["Cost estimat", f"${cost:.2f}" if cost is not None else "–"],
             ["Transcript", str(run_dir / "transcript.json")]]
+    return rows
+
+
+def _show_summary(state: RunState, rows: list) -> None:
     ui.console.print()
     ui.show_table("📋 Rezumatul rulării", ["", ""], rows)
     if state.report_done:
@@ -266,6 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="modelul Claude (implicit claude-opus-5-5)")
     parser.add_argument("--no-cache", action="store_true", help="ignoră cache-ul de date de pe disc")
     parser.add_argument("--mandate", help="mandatul clientului (text liber), în locul celui implicit")
+    parser.add_argument("--no-open", action="store_true", help="nu deschide raportul HTML în browser la final")
     args = parser.parse_args(argv)
 
     settings = config.load(model=args.model, effort=args.effort, max_iterations=args.max_iterations)
@@ -275,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     except anthropic.AnthropicError as exc:
         ui.error(f"Nu pot crea clientul Anthropic: {exc}. Pune ANTHROPIC_API_KEY în .env (vezi .env.example).")
         return 2
-    state = run(settings, client, mandate=args.mandate)
+    state = run(settings, client, mandate=args.mandate, open_browser=not args.no_open)
     return 0 if state.report_done else 1
 
 

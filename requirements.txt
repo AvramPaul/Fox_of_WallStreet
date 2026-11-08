@@ -6,6 +6,7 @@ ddgs==9.16.1
 requests==2.34.2
 tenacity==9.2.1
 rich==15.0.0
+markdown-it-py==4.2.0
 python-dotenv==1.2.4
 jsonschema==4.26.0
 pytest==9.2.0

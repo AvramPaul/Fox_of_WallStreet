@@ -12,6 +12,7 @@ from tools.finviz_tool import filter_catalog, finviz_dynamic_screener
 from tools.fundamentals_tool import deep_fundamental_inspector
 from tools.osint_tool import paranoid_osint_radar
 from tools.report_tool import generate_client_report
+from utils import journal
 
 FINVIZ_DESCRIPTION = f"""Rulează screener-ul FinViz (acțiuni listate în SUA) cu o combinație de filtre aleasă de tine și întoarce numărul TOTAL de companii care trec + top companii după capitalizare (P/E, Forward P/E, PEG, P/FCF, ROE, ROI, marje, LT Debt/Equity, Current Ratio, creștere EPS 5 ani, creștere vânzări 5 ani, tranzacții insideri, deținere instituțională).
 
@@ -86,7 +87,7 @@ TOOLS: list[dict] = [
     {
         "name": "generate_client_report",
         "description": (
-            "Salvează raportul final „Vulpea de pe Wall Street” în raport_sateliti.md și îl afișează în terminal. "
+            "Salvează raportul final „Vulpea de pe Wall Street” ca pagină HTML (raport_sateliti.html) și îl afișează în terminal. "
             "Trimite raportul COMPLET în Markdown, în română, într-un singur apel: 3-5 companii, fiecare cu "
             "subsecțiunile „Povestea pe șleau”, „De ce cifrele arată beton” și „Testul meu de Paranoia (Ce am "
             "săpat pe net)”, plus secțiunea „Cimitirul Iluziilor (Firme pe care le-am aruncat la gunoi azi)” cu "
@@ -137,6 +138,8 @@ def dispatch(name: str, tool_input) -> tuple[str, bool]:
         return _error(f"Parametri invalizi pentru {name}: {details}",
                       "Corectează parametrii conform schemei și reîncearcă (input posibil trunchiat)."), True
     content = FUNCTIONS[name](**tool_input)
+    if name != "generate_client_report":  # raportul e păstrat separat, de report_tool
+        journal.tool_result(name, tool_input, content)
     try:
         ok = json.loads(content).get("ok", True)
     except (ValueError, AttributeError):

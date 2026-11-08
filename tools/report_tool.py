@@ -1,4 +1,4 @@
-"""generate_client_report — validează, salvează (`raport_sateliti.md`) și afișează raportul final."""
+"""generate_client_report — validează raportul final, îl salvează ca pagină HTML (`raport_sateliti.html`) și îl afișează."""
 
 import datetime as dt
 import re
@@ -7,6 +7,7 @@ from pathlib import Path
 
 import config
 from utils import console as ui
+from utils import html_report, journal
 from utils.resilience import ToolError, safe_tool
 
 SETTINGS = config.load()
@@ -17,19 +18,41 @@ SECTIONS = {  # secțiunile cerute pentru fiecare companie (comparate fără dia
     "testul meu de paranoia": "Testul meu de Paranoia",
 }
 GRAVEYARD = ("cimitirul iluziilor", "Cimitirul Iluziilor (Firme pe care le-am aruncat la gunoi azi)")
-DISCLAIMER = ("> ⚠️ *Material educațional generat automat de un agent AI pe baza unor surse publice gratuite "
+DISCLAIMER = ("Material educațional generat automat de un agent AI pe baza unor surse publice gratuite "
               "(FinViz, Yahoo Finance, DuckDuckGo, HackerNews, GitHub, Reddit). Nu este o recomandare de "
-              "investiții. Verifică datele și decide pe propria răspundere.*")
+              "investiții. Verifică datele și decide pe propria răspundere.")
 
 _run_dir: Path | None = None
 _model: str = SETTINGS.model
+_report_md: str | None = None
+_started: dt.datetime = dt.datetime.now()
 
 
 def configure(run_dir: Path | None = None, model: str | None = None) -> None:
-    """Apelat de agent.py: unde se salvează copia raportului și ce model apare în antet."""
-    global _run_dir, _model
+    """Apelat de agent.py la începutul rulării: unde se salvează copia raportului și ce model apare în antet."""
+    global _run_dir, _model, _report_md, _started
     _run_dir = run_dir
     _model = model or _model
+    _report_md = None
+    _started = dt.datetime.now()
+
+
+def write_html(summary: list | None = None, stop_reason: str = "") -> list[str]:
+    """Scrie raportul HTML (pagina 1: raportul, pagina 2: jurnalul de până acum).
+
+    Cu raport valid: `raport_sateliti.html` în proiect + copie în `runs/<data-ora>/`.
+    Fără raport (rulare oprită): doar în `runs/<data-ora>/`, ca să nu suprascrie raportul bun anterior.
+    """
+    meta = {"model": _model, "when": f"{_started:%Y-%m-%d %H:%M}", "run": _run_dir.name if _run_dir else "",
+            "summary": summary or [], "stop_reason": stop_reason, "disclaimer": DISCLAIMER}
+    page = html_report.render(_report_md, journal.EVENTS, journal.TOOL_RESULTS, meta)
+    targets = [config.REPORT_PATH] if _report_md else []
+    if _run_dir:
+        targets.append(_run_dir / config.REPORT_PATH.name)
+    for path in targets:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(page, encoding="utf-8")
+    return [str(p) for p in targets]
 
 
 def _plain(text: str) -> str:
@@ -62,20 +85,12 @@ def check_report(markdown: str) -> dict:
 
 @safe_tool
 def generate_client_report(markdown_content: str) -> dict:
-    """Salvează raportul final în raport_sateliti.md și îl afișează formatat în terminal."""
+    """Salvează raportul final ca pagină HTML (raport_sateliti.html) și îl afișează formatat în terminal."""
+    global _report_md
     stats = check_report(markdown_content)
-    now = dt.datetime.now()
-    header = f"*🐺 Paranoid Wolf — Satellite Hunter · {now:%Y-%m-%d %H:%M} · model `{_model}`*\n\n"
-    document = header + markdown_content.strip() + "\n\n---\n\n" + DISCLAIMER + "\n"
+    _report_md = markdown_content.strip()
+    paths = write_html()
 
-    config.REPORT_PATH.write_text(document, encoding="utf-8")
-    paths = [str(config.REPORT_PATH)]
-    if _run_dir:
-        _run_dir.mkdir(parents=True, exist_ok=True)
-        copy = _run_dir / config.REPORT_PATH.name
-        copy.write_text(document, encoding="utf-8")
-        paths.append(str(copy))
-
-    ui.show_markdown(document, title=f"📄 {config.REPORT_PATH.name}")
+    ui.show_markdown(f"{_report_md}\n\n---\n\n> ⚠️ *{DISCLAIMER}*", title=f"📄 {config.REPORT_PATH.name}")
     ui.success(f"Raport salvat: {paths[0]}")
-    return {"path": paths[0], "copies": paths[1:], "chars": len(document), "companies": stats["companies"]}
+    return {"path": paths[0], "copies": paths[1:], "companies": stats["companies"]}
